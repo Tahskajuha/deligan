@@ -3,8 +3,8 @@
 # GAN++, Nx-GAN, MoE-GAN, Ensemble-GAN. Corresponding details about these experiments can be found 
 # in section 5.2 of the paper and the results showing the outputs can be seen in Fig 3.
 
-import tensorflow.compat.v1 as tf
-tf.disable_eager_execution()
+import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 import numpy as np
 import os
 import time
@@ -17,27 +17,27 @@ results_dir='./../results/toy'
 
 def linear(x,output_dim, name="linear"):
     """ Linear Layer for 2d input x """
-    w=tf.get_variable(name+"/w", [x.get_shape()[1], output_dim])
-    b=tf.get_variable(name+"/b", [output_dim], initializer=tf.constant_initializer(0.0))
+    w=tf.compat.v1.get_variable(name+"/w", [x.get_shape()[1], output_dim])
+    b=tf.compat.v1.get_variable(name+"/b", [output_dim], initializer=tf.compat.v1.constant_initializer(0.0))
     return tf.matmul(x,w)+b
 
 def discriminator(image, reuse=False):
     """ Discriminator function description """
-    with tf.variable_scope('disc', reuse=reuse):
+    with tf.compat.v1.variable_scope('disc', reuse=reuse):
         h0 = tf.tanh(linear(image,df_dim,'d_l1'))
         h1 = linear(h0, 1, 'd_l2')
     return tf.nn.sigmoid(h1), h1
 
 def generator(z, n):
     """ Generator function description """
-    with tf.variable_scope('gen'+str(n)):
+    with tf.compat.v1.variable_scope('gen'+str(n)):
         #z = tf.tanh(linear(z, batchsize,'g_l0')) 		# Uncomment for testing GAN++ model
         h1 = tf.tanh(linear(z, gf_dim,'g_l1'))
         h2 = linear(h1, 2, 'g_l2')
     return tf.nn.tanh(h2)
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.25)
-with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
+gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.25)
+with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options)) as sess:
     imageshape = [2]
     z_dim = 2
     gf_dim = 32
@@ -47,13 +47,13 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     beta1 = 0.5
 	
     # Taking Inputs for the graph as placeholders
-    images = tf.placeholder(tf.float32, [batchsize] + imageshape, name="real_images")
-    z = tf.placeholder(tf.float32, [None, z_dim], name="z")
-    lr1 = tf.placeholder(tf.float32, name="lr")
+    images = tf.compat.v1.placeholder(tf.float32, [batchsize] + imageshape, name="real_images")
+    z = tf.compat.v1.placeholder(tf.float32, [None, z_dim], name="z")
+    lr1 = tf.compat.v1.placeholder(tf.float32, name="lr")
 
     
-    zin = tf.get_variable("g_z", [batchsize, z_dim],initializer=tf.random_uniform_initializer(-1,1))
-    zsig = tf.get_variable("g_sig", [batchsize, z_dim],initializer=tf.constant_initializer(0.02))
+    zin = tf.compat.v1.get_variable("g_z", [batchsize, z_dim],initializer=tf.compat.v1.random_uniform_initializer(-1,1))
+    zsig = tf.compat.v1.get_variable("g_sig", [batchsize, z_dim],initializer=tf.compat.v1.constant_initializer(0.02))
     inp = tf.add(zin,tf.multiply(z,zsig))				#Uncomment this line for testing the DeliGAN
     #moe = tf.eye(batchsize)					#Uncomment this line for testing the MoE-GAN
     #inp = tf.concat_v2([moe, z],1) 				#Uncomment this line for testing the MoE-GAN
@@ -66,7 +66,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     #	g = generator(z[n+1:n+2],n+1)				#Uncomment this line when testing Ensemble-GAN
     #G = tf.concat_v2([g,G],0)					#Uncomment this line when testing Ensemble-GAN
     
-    lab = tf.where(G[:,0]<0)
+    lab = tf.compat.v1.where(G[:,0]<0)
     D_prob, D_logit = discriminator(images)
     D_fake_prob, D_fake_logit = discriminator(G, reuse=True)
 
@@ -80,7 +80,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     dloss = d_loss_real + d_loss_fake
 
 	
-    t_vars = tf.trainable_variables()
+    t_vars = tf.compat.v1.trainable_variables()
     d_vars = [var for var in t_vars if 'd_' in var.name]
     g_vars = [var for var in t_vars if 'g_' in var.name]
 
@@ -92,11 +92,11 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     data = data.reshape([-1,2])
 
     # Optimization
-    d_optim = tf.train.AdamOptimizer(lr1, beta1=beta1).minimize(dloss, var_list=d_vars)
-    g_optim = tf.train.AdamOptimizer(lr1, beta1=beta1).minimize(gloss1, var_list=g_vars)
+    d_optim = tf.compat.v1.train.AdamOptimizer(lr1, beta1=beta1).minimize(dloss, var_list=d_vars)
+    g_optim = tf.compat.v1.train.AdamOptimizer(lr1, beta1=beta1).minimize(gloss1, var_list=g_vars)
 
-    tf.initialize_all_variables().run()
-    saver = tf.train.Saver(max_to_keep=10)
+    tf.compat.v1.initialize_all_variables().run()
+    saver = tf.compat.v1.train.Saver(max_to_keep=10)
 
     counter = 1
     start_time = time.time()

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-""""
+"""
 Simple implementation of http://arxiv.org/pdf/1502.04623v2.pdf in TensorFlow
-Example Usage: 
-	python draw.py --data_dir=/tmp/draw --read_attn=True --write_attn=True
+Example Usage:
+    python draw.py --data_dir=/tmp/draw --read_attn=True --write_attn=True
 Author: Eric Jang
 """
 
@@ -16,13 +16,13 @@ import tsne
 import numpy as Math
 import pylab as Plot
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-tf.flags.DEFINE_string("data_dir", "", "")
-tf.flags.DEFINE_boolean("read_attn", True, "enable attention for reader")
-tf.flags.DEFINE_boolean("write_attn",True, "enable attention for writer")
+tf.flags.DEFINE_string("data_dir","", "")
+tf.flags.DEFINE_boolean("read_attn", True,"enable attention for reader")
+tf.flags.DEFINE_boolean("write_attn",True,"enable attention for writer")
 FLAGS = tf.flags.FLAGS
 
-## MODEL PARAMETERS ## 
-data_directory = os.path.join(FLAGS.data_dir, "easy")
+## MODEL PARAMETERS ##
+data_directory = os.path.join(FLAGS.data_dir,"easy")
 if not os.path.exists(data_directory):
     os.makedirs(data_directory)
 train_data = input_data.read_data_sets(data_directory, one_hot=True).train
@@ -42,7 +42,7 @@ train_iters=10000
 learning_rate=1e-3 # learning rate for optimizer
 eps=1e-8 # epsilon for numerical stability
 
-## BUILD MODEL ## 
+## BUILD MODEL ##
 
 DO_SHARE=None # workaround for variable_scope(reuse=True)
 
@@ -57,7 +57,7 @@ def linear(x,output_dim):
     affine transformation Wx+b
     assumes x.shape = (batch_size, num_features)
     """
-    w=tf.get_variable("w", [x.get_shape()[1], output_dim]) 
+    w=tf.get_variable("w", [x.get_shape()[1], output_dim])
     b=tf.get_variable("b", [output_dim], initializer=tf.constant_initializer(0.0))
     return tf.matmul(x,w)+b
 
@@ -75,10 +75,8 @@ def batch_norm(x, n_out, phase_train, conv=True, scope='bn'):
         normed:      batch-normalized maps
     """
     with tf.variable_scope(scope):
-        beta = tf.Variable(tf.constant(0.0, shape=[n_out]),
-                                     name='beta', trainable=True)
-        gamma = tf.Variable(tf.constant(1.0, shape=[n_out]),
-                                      name='gamma', trainable=True)
+        beta = tf.Variable(tf.constant(0.0, shape=[n_out]), name='beta', trainable=True)
+        gamma = tf.Variable(tf.constant(1.0, shape=[n_out]), name='gamma', trainable=True)
         if conv:
             batch_mean, batch_var = tf.nn.moments(x, [0,1,2], name='moments')
         else:
@@ -90,9 +88,7 @@ def batch_norm(x, n_out, phase_train, conv=True, scope='bn'):
             with tf.control_dependencies([ema_apply_op]):
                 return tf.identity(batch_mean), tf.identity(batch_var)
 
-        mean, var = tf.cond(phase_train,
-                            mean_var_with_update,
-                            lambda: (ema.average(batch_mean), ema.average(batch_var)))
+        mean, var = tf.cond(phase_train, mean_var_with_update, lambda: (ema.average(batch_mean), ema.average(batch_var)))
         normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, 1e-3)
     return normed
 
@@ -122,7 +118,7 @@ def attn_window(scope,h_dec,N):
     delta=(max(A,B)-1)/(N-1)*tf.exp(log_delta) # batch x N
     return filterbank(gx,gy,sigma2,delta,N)+(tf.exp(log_gamma),)
 
-## READ ## 
+## READ ##
 def read_no_attn(x,x_hat,h_dec_prev):
     return tf.concat(1,[x,x_hat])
 
@@ -140,7 +136,7 @@ def read_attn(x,x_hat,h_dec_prev):
 
 read = read_attn if FLAGS.read_attn else read_no_attn
 
-## ENCODE ## 
+## ENCODE ##
 def encode(state,r,h_dec):
     """
     run LSTM
@@ -149,24 +145,24 @@ def encode(state,r,h_dec):
     returns: (output, new_state)
     """
     with tf.variable_scope("encoder",reuse=DO_SHARE):
-	"""	
-	def lstm_cell(i, o, state):	
-	h = tf.get_variable("h", [batch_size, enc_size])
-	input_gate = tf.sigmoid(tf.matmul(i, ix) + tf.matmul(o, im) + ib)
-    	forget_gate = tf.sigmoid(tf.matmul(i, fx) + tf.matmul(o, fm) + fb)
-	tf.get_variable("w", [x.get_shape()[1], output_dim])
-    	update = tf.matmul(i, cx) + tf.matmul(o, cm) + cb
-    	state = forget_gate * state + input_gate * tf.tanh(update)
-    	output_gate = tf.sigmoid(tf.matmul(i, ox) + tf.matmul(o, om) + ob)
-    	return output_gate * tf.tanh(state), state
-	"""
+        """
+        def lstm_cell(i, o, state):
+        h = tf.get_variable("h", [batch_size, enc_size])
+        input_gate = tf.sigmoid(tf.matmul(i, ix) + tf.matmul(o, im) + ib)
+        forget_gate = tf.sigmoid(tf.matmul(i, fx) + tf.matmul(o, fm) + fb)
+        tf.get_variable("w", [x.get_shape()[1], output_dim])
+        update = tf.matmul(i, cx) + tf.matmul(o, cm) + cb
+        state = forget_gate * state + input_gate * tf.tanh(update)
+        output_gate = tf.sigmoid(tf.matmul(i, ox) + tf.matmul(o, om) + ob)
+        return output_gate * tf.tanh(state), state
+        """
         W1=tf.get_variable("W1", [3, 3, 2, 32*2])
-        W2=tf.get_variable("W2", [3, 3, 32*2, 64*2]) 
-        W3=tf.get_variable("W3", [3, 3, 64*2, 128*2]) 
-        W4=tf.get_variable("W4", [1, 1, 128*2, 5]) 
+        W2=tf.get_variable("W2", [3, 3, 32*2, 64*2])
+        W3=tf.get_variable("W3", [3, 3, 64*2, 128*2])
+        W4=tf.get_variable("W4", [1, 1, 128*2, 5])
 
 
-        
+
         x=tf.reshape(r, [-1,rs,rs,2])
         x=tf.nn.conv2d(x, W1, strides=[1, 2, 2, 1], padding='SAME')
         x = tf.nn.relu(batch_norm(x, 32*2, phase_train))
@@ -176,8 +172,7 @@ def encode(state,r,h_dec):
         x = tf.nn.relu(batch_norm(x, 128*2, phase_train))
         x=tf.nn.conv2d(x, W4, strides=[1, 1, 1, 1], padding='VALID')
         x = tf.nn.relu(batch_norm(x, 5, phase_train))
-        input=tf.reshape(x, [-1, (rs/4)*(rs/4)*5])         
-	    
+        input=tf.reshape(x, [-1, (rs/4)*(rs/4)*5])
         return lstm_enc(tf.concat(1,[input,h_dec]),state)
 
 ## Q-SAMPLER (VARIATIONAL AUTOENCODER) ##
@@ -194,17 +189,17 @@ def sampleQ(h_enc):
         sigma=tf.exp(logsigma)
     return (mu + sigma*e, mu, logsigma, sigma)
 
-## DECODER ## 
+## DECODER ##
 def decode(state,input):
     with tf.variable_scope("decoder",reuse=DO_SHARE):
-        
+
         h_dec, state = lstm_dec(input, state)
         W1=tf.get_variable("W1", [3, 3, 128*2, dec_size])
-        W2=tf.get_variable("W2", [3, 3, 64*2, 128*2]) 
-        W3=tf.get_variable("W3", [5, 5, 64*2, 64*2]) 
+        W2=tf.get_variable("W2", [3, 3, 64*2, 128*2])
+        W3=tf.get_variable("W3", [5, 5, 64*2, 64*2])
         W4=tf.get_variable("W4", [5, 5, 32*2, 64*2])
         W5=tf.get_variable("W5", [5, 5, 32*2, 32*2])
-        W6=tf.get_variable("W6", [5, 5, 1, 32*2]) 
+        W6=tf.get_variable("W6", [5, 5, 1, 32*2])
 
         x=tf.reshape(h_dec, [-1,1,1,dec_size])
         x=tf.nn.conv2d_transpose(x, W1, [batch_size, 3, 3, 128*2], strides=[1, 1, 1, 1], padding='VALID')
@@ -221,7 +216,7 @@ def decode(state,input):
         x = tf.nn.relu(batch_norm(x, 1, phase_train))
         return tf.reshape(x, [-1, 12*12]), h_dec, state
 
-## WRITER ## 
+## WRITER ##
 def write_no_attn(h_dec):
     with tf.variable_scope("write",reuse=DO_SHARE):
         return linear(h_dec,img_size)
@@ -240,7 +235,7 @@ def write_attn(h_dec):
 
 write=write_attn if FLAGS.write_attn else write_no_attn
 
-## STATE VARIABLES ## 
+## STATE VARIABLES ##
 
 cs=[0]*T # sequence of canvases
 z=[0]*T
@@ -250,7 +245,7 @@ h_dec_prev=tf.zeros((batch_size,dec_size))
 enc_state=lstm_enc.zero_state(batch_size, tf.float32)
 dec_state=lstm_dec.zero_state(batch_size, tf.float32)
 
-## DRAW MODEL ## 
+## DRAW MODEL ##
 
 # construct the unrolled computational graph
 for t in range(T):
@@ -265,7 +260,7 @@ for t in range(T):
     h_dec_prev=h_dec
     DO_SHARE=True # from now on, share variables
 
-## LOSS FUNCTION ## 
+## LOSS FUNCTION ##
 """
 def binary_crossentropy(t,o):
     return -(t*tf.log(o+eps) + (1.0-t)*tf.log(1.0-o+eps))
@@ -288,7 +283,7 @@ Lz=tf.reduce_mean(KL) # average over minibatches
 
 cost=Lx+Lz
 
-## OPTIMIZER ## 
+## OPTIMIZER ##
 
 optimizer=tf.train.AdamOptimizer(learning_rate, beta1=0.5)
 grads=optimizer.compute_gradients(cost)
@@ -297,7 +292,7 @@ for i,(g,v) in enumerate(grads):
         grads[i]=(tf.clip_by_norm(g,5),v) # clip gradients
 train_op=optimizer.apply_gradients(grads)
 """
-## RUN TRAINING ## 
+## RUN TRAINING ##
 
  # binarized (0-1) mnist data
 
@@ -315,9 +310,9 @@ sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
 
 saver = tf.train.Saver() # saves variables learned during training
 #tf.initialize_all_variables().run()
-#saver.restore(sess, "drawmodel.ckpt") # to restore from model, uncomment this line
+#saver.restore(sess,"drawmodel.ckpt") # to restore from model, uncomment this line
 
-saver.restore(sess, "drawmodel.ckpt") # to restore from model, uncomment this line
+saver.restore(sess,"drawmodel.ckpt") # to restore from model, uncomment this line
 xtrain=train_data._images # xtrain is (batch_size x img_size)
 feed_dict={x:xtrain, phase_train.name: False}
 canvases=sess.run(cs,feed_dict)
