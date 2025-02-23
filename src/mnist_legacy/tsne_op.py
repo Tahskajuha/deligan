@@ -47,19 +47,19 @@ eps=1e-8 # epsilon for numerical stability
 
 DO_SHARE=None # workaround for variable_scope(reuse=True)
 
-x = tf.placeholder(tf.float32,shape=(batch_size,img_size)) # input (batch_size * img_size)
-e=tf.random_normal((batch_size,z_size), mean=0, stddev=1) # Qsampler noise
+x = tf.compat.v1.placeholder(tf.float32,shape=(batch_size,img_size)) # input (batch_size * img_size)
+e=tf.random.normal((batch_size,z_size), mean=0, stddev=1) # Qsampler noise
 lstm_enc = LSTMCell(enc_size, (rs/4)*(rs/4)*5+dec_size) # encoder Op
 lstm_dec = LSTMCell(dec_size, z_size) # decoder Op
-phase_train = tf.placeholder(tf.bool, name='phase_train')
+phase_train = tf.compat.v1.placeholder(tf.bool, name='phase_train')
 
 def linear(x,output_dim):
     """
     affine transformation Wx+b
     assumes x.shape = (batch_size, num_features)
     """
-    w=tf.get_variable("w", [x.get_shape()[1], output_dim])
-    b=tf.get_variable("b", [output_dim], initializer=tf.constant_initializer(0.0))
+    w=tf.compat.v1.get_variable("w", [x.get_shape()[1], output_dim])
+    b=tf.compat.v1.get_variable("b", [output_dim], initializer=tf.compat.v1.constant_initializer(0.0))
     return tf.matmul(x,w)+b
 
 from tensorflow.python import control_flow_ops
@@ -75,7 +75,7 @@ def batch_norm(x, n_out, phase_train, conv=True, scope='bn'):
     Return:
         normed:      batch-normalized maps
     """
-    with tf.variable_scope(scope):
+    with tf.compat.v1.variable_scope(scope):
         beta = tf.Variable(tf.constant(0.0, shape=[n_out]), name='beta', trainable=True)
         gamma = tf.Variable(tf.constant(1.0, shape=[n_out]), name='gamma', trainable=True)
         if conv:
@@ -105,12 +105,12 @@ def filterbank(gx, gy, sigma2,delta, N):
     Fx = tf.exp(-tf.square((a - mu_x) / (2*sigma2))) # 2*sigma2?
     Fy = tf.exp(-tf.square((b - mu_y) / (2*sigma2))) # batch x N x B
     # normalize, sum over A and B dims
-    Fx=Fx/tf.maximum(tf.reduce_sum(Fx,2,keep_dims=True),eps)
-    Fy=Fy/tf.maximum(tf.reduce_sum(Fy,2,keep_dims=True),eps)
+    Fx=Fx/tf.maximum(tf.reduce_sum(Fx,2,keepdims=True),eps)
+    Fy=Fy/tf.maximum(tf.reduce_sum(Fy,2,keepdims=True),eps)
     return Fx,Fy
 
 def attn_window(scope,h_dec,N):
-    with tf.variable_scope(scope,reuse=DO_SHARE):
+    with tf.compat.v1.variable_scope(scope,reuse=DO_SHARE):
         params=linear(h_dec,5)
     gx_,gy_,log_sigma2,log_delta,log_gamma=tf.split(1,5,params)
     gx=(A+1)/2*(gx_+1)
@@ -145,7 +145,7 @@ def encode(state,r,h_dec):
     input = cat(read,h_dec_prev)
     returns: (output, new_state)
     """
-    with tf.variable_scope("encoder",reuse=DO_SHARE):
+    with tf.compat.v1.variable_scope("encoder",reuse=DO_SHARE):
         """
         def lstm_cell(i, o, state):
         h = tf.get_variable("h", [batch_size, enc_size])
@@ -157,21 +157,21 @@ def encode(state,r,h_dec):
         output_gate = tf.sigmoid(tf.matmul(i, ox) + tf.matmul(o, om) + ob)
         return output_gate * tf.tanh(state), state
         """
-        W1=tf.get_variable("W1", [3, 3, 2, 32*2])
-        W2=tf.get_variable("W2", [3, 3, 32*2, 64*2])
-        W3=tf.get_variable("W3", [3, 3, 64*2, 128*2])
-        W4=tf.get_variable("W4", [1, 1, 128*2, 5])
+        W1=tf.compat.v1.get_variable("W1", [3, 3, 2, 32*2])
+        W2=tf.compat.v1.get_variable("W2", [3, 3, 32*2, 64*2])
+        W3=tf.compat.v1.get_variable("W3", [3, 3, 64*2, 128*2])
+        W4=tf.compat.v1.get_variable("W4", [1, 1, 128*2, 5])
 
 
 
         x=tf.reshape(r, [-1,rs,rs,2])
-        x=tf.nn.conv2d(x, W1, strides=[1, 2, 2, 1], padding='SAME')
+        x=tf.nn.conv2d(x, filters=W1, strides=[1, 2, 2, 1], padding='SAME')
         x = tf.nn.relu(batch_norm(x, 32*2, phase_train))
-        x=tf.nn.conv2d(x, W2, strides=[1, 1, 1, 1], padding='SAME')
+        x=tf.nn.conv2d(x, filters=W2, strides=[1, 1, 1, 1], padding='SAME')
         x = tf.nn.relu(batch_norm(x, 64*2, phase_train))
-        x=tf.nn.conv2d(x, W3, strides=[1, 2, 2, 1], padding='SAME')
+        x=tf.nn.conv2d(x, filters=W3, strides=[1, 2, 2, 1], padding='SAME')
         x = tf.nn.relu(batch_norm(x, 128*2, phase_train))
-        x=tf.nn.conv2d(x, W4, strides=[1, 1, 1, 1], padding='VALID')
+        x=tf.nn.conv2d(x, filters=W4, strides=[1, 1, 1, 1], padding='VALID')
         x = tf.nn.relu(batch_norm(x, 5, phase_train))
         input=tf.reshape(x, [-1, (rs/4)*(rs/4)*5])
         return lstm_enc(tf.concat(1,[input,h_dec]),state)
@@ -183,24 +183,24 @@ def sampleQ(h_enc):
     Samples Zt ~ normrnd(mu,sigma) via reparameterization trick for normal dist
     mu is (batch,z_size)
     """
-    with tf.variable_scope("mu",reuse=DO_SHARE):
+    with tf.compat.v1.variable_scope("mu",reuse=DO_SHARE):
         mu=linear(h_enc,z_size)
-    with tf.variable_scope("sigma",reuse=DO_SHARE):
+    with tf.compat.v1.variable_scope("sigma",reuse=DO_SHARE):
         logsigma=linear(h_enc,z_size)
         sigma=tf.exp(logsigma)
     return (mu + sigma*e, mu, logsigma, sigma)
 
 ## DECODER ##
 def decode(state,input):
-    with tf.variable_scope("decoder",reuse=DO_SHARE):
+    with tf.compat.v1.variable_scope("decoder",reuse=DO_SHARE):
 
         h_dec, state = lstm_dec(input, state)
-        W1=tf.get_variable("W1", [3, 3, 128*2, dec_size])
-        W2=tf.get_variable("W2", [3, 3, 64*2, 128*2])
-        W3=tf.get_variable("W3", [5, 5, 64*2, 64*2])
-        W4=tf.get_variable("W4", [5, 5, 32*2, 64*2])
-        W5=tf.get_variable("W5", [5, 5, 32*2, 32*2])
-        W6=tf.get_variable("W6", [5, 5, 1, 32*2])
+        W1=tf.compat.v1.get_variable("W1", [3, 3, 128*2, dec_size])
+        W2=tf.compat.v1.get_variable("W2", [3, 3, 64*2, 128*2])
+        W3=tf.compat.v1.get_variable("W3", [5, 5, 64*2, 64*2])
+        W4=tf.compat.v1.get_variable("W4", [5, 5, 32*2, 64*2])
+        W5=tf.compat.v1.get_variable("W5", [5, 5, 32*2, 32*2])
+        W6=tf.compat.v1.get_variable("W6", [5, 5, 1, 32*2])
 
         x=tf.reshape(h_dec, [-1,1,1,dec_size])
         x=tf.nn.conv2d_transpose(x, W1, [batch_size, 3, 3, 128*2], strides=[1, 1, 1, 1], padding='VALID')
@@ -219,11 +219,11 @@ def decode(state,input):
 
 ## WRITER ##
 def write_no_attn(h_dec):
-    with tf.variable_scope("write",reuse=DO_SHARE):
+    with tf.compat.v1.variable_scope("write",reuse=DO_SHARE):
         return linear(h_dec,img_size)
 
 def write_attn(h_dec):
-    with tf.variable_scope("writeW",reuse=DO_SHARE):
+    with tf.compat.v1.variable_scope("writeW",reuse=DO_SHARE):
         w=linear(h_dec,write_size) # batch x (write_n*write_n)
     N=write_n
     w=tf.reshape(w,[batch_size,N,N])
@@ -306,10 +306,10 @@ Lzs=[0]*train_iters
 #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
 
 #sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
+gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1)
+sess = tf.compat.v1.InteractiveSession(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
 
-saver = tf.train.Saver() # saves variables learned during training
+saver = tf.compat.v1.train.Saver() # saves variables learned during training
 #tf.initialize_all_variables().run()
 #saver.restore(sess,"drawmodel.ckpt") # to restore from model, uncomment this line
 
