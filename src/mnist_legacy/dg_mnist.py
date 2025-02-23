@@ -18,7 +18,7 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib
 import numpy as Math
 import sys
-from tensorflow.keras.layers import BatchNormalization as batch_norm
+from tensorflow.keras.layers import BatchNormalization
 
 data_dir='../datasets/mnist/'
 results_dir=os.path.expanduser("~/results")
@@ -84,11 +84,21 @@ def convt(x, outputShape, Wx=3, Wy=3, stridex=1, stridey=1, padding='SAME', tran
     convt = tf.nn.conv2d_transpose(x, w, output_shape=outputShape, strides=[1,stridex,stridey,1], padding=padding) +b
     return convt
 
+def batch_norm(x, training, scope='batch_norm'):
+    with tf.name_scope(scope):
+        return BatchNormalization(
+                momentum = 0.891,
+                epsilon = 1e-5,
+                center = True,
+                scale = True,
+                trainable = True
+        )(x, training = training)
+
 def disc_batch_norm(inputs, training, name="batch_norm"):
    return tf.cond(
            training,
-           lambda: batch_norm(momentum = 0.9, scale = True, name = 'd_bn')(inputs, training = True),
-           lambda: batch_norm(momentum = 0.9, scale = True, name = 'd_bn')(inputs, training = False)
+           lambda: batch_norm(inputs, training = True),
+           lambda: batch_norm(inputs, training = False)
     )
 
 def discriminator(image, Reuse=False):
