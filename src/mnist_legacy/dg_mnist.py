@@ -4,7 +4,7 @@
 
 import tensorflow as tf
 from tensorflow.keras import backend as K
-tf.compat.v1.disable_v2_behavior()
+tf.compat.v1.disable_eager_execution()
 import numpy as np
 from ops import *
 from utils import *
@@ -114,7 +114,6 @@ def discriminator(image, Reuse=False):
         bn2 = disc_batch_norm(conv_output2, training = phase_train, name = 'd_bn2')
         h2 = lrelu(bn2)
         h3 = tf.nn.max_pool2d(input=h2, ksize=[1,4,4,1], strides=[1,1,1,1],padding='VALID')
-        h6 = tf.reshape(h2,[-1, 4*4*df_dim*4])
         h7 = Minibatch_Discriminator(h3, num_kernels=df_dim*4, name = 'd_MD')
         h8 = dense(tf.reshape(h7, [batchsize, -1]), df_dim*4*2, 1, scope='d_h8_lin')
         return tf.nn.sigmoid(h8), h8
@@ -150,11 +149,11 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
 
     D_fake_prob, D_fake_logit = discriminator(G, Reuse=True)
 
-    d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(D_logit, tf.ones_like(D_logit)))
-    d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(D_fake_logit, tf.zeros_like(D_fake_logit)))
+    d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = D_logit, labels = tf.ones_like(D_logit)))
+    d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = D_fake_logit, labels = tf.zeros_like(D_fake_logit)))
 
     sigma_loss = tf.reduce_mean(tf.square(zsig-1))/3    # sigma regularizer
-    gloss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(D_fake_logit, tf.ones_like(D_fake_logit)))
+    gloss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = D_fake_logit, labels = tf.ones_like(D_fake_logit)))
     dloss = d_loss_real + d_loss_fake
 
     t_vars = tf.compat.v1.trainable_variables()
@@ -196,10 +195,10 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
         # saver.restore(sess, tf.train.latest_checkpoint(os.getcwd()+"../results/mnist/train/"))
         # training a model
         for epoch in range(4000):
-            batch_idx = data_size/batchsize
+            batch_idx = data_size//batchsize
             batch = data[rng.permutation(data_size)]
             lr = learningrate * (np.minimum((4 - epoch/1000.), 3.)/3)
-            for idx in range(int(batch_idx)):
+            for idx in range(batch_idx):
                 batch_images = batch[idx*batchsize:(idx+1)*batchsize]
                 batch_z = np.random.uniform(-1.0, 1.0, [batchsize, z_dim]).astype(np.float32)
                 if count1>3:
