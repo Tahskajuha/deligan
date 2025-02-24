@@ -84,21 +84,22 @@ def convt(x, outputShape, Wx=3, Wy=3, stridex=1, stridey=1, padding='SAME', tran
     convt = tf.nn.conv2d_transpose(x, w, output_shape=outputShape, strides=[1,stridex,stridey,1], padding=padding) +b
     return convt
 
-def batch_norm(x, training, scope='batch_norm'):
-    with tf.name_scope(scope):
-        return BatchNormalization(
+def batch_norm(x, training, scope):
+    with tf.compat.v1.variable_scope(scope, reuse = tf.compat.v1.AUTO_REUSE):
+        bn = BatchNormalization(
                 momentum = 0.891,
                 epsilon = 1e-5,
                 center = True,
                 scale = True,
                 trainable = True
-        )(x, training = training)
+        )
+        return bn(x, training = training)
 
-def disc_batch_norm(inputs, training, name="batch_norm"):
+def disc_batch_norm(inputs, training, name):
    return tf.cond(
            training,
-           lambda: batch_norm(inputs, training = True),
-           lambda: batch_norm(inputs, training = False)
+           lambda: batch_norm(inputs, training = True, scope = name),
+           lambda: batch_norm(inputs, training = False, scope = name)
     )
 
 def discriminator(image, Reuse=False):
@@ -107,10 +108,10 @@ def discriminator(image, Reuse=False):
         conv_output = conv(image, 5, 5, 1, df_dim, stridex=2, stridey=2, name='d_h0_conv')
         h0 = lrelu(conv_output)
         conv_output1 = conv(h0, 5, 5, df_dim, df_dim*2, stridex = 2, stridey = 2, name = 'd_h1_conv')
-        bn1 = disc_batch_norm(conv_output1, training = phase_train)
+        bn1 = disc_batch_norm(conv_output1, training = phase_train, name = 'd_bn1')
         h1 = lrelu(bn1)
         conv_output2 = conv(h1, 3, 3, df_dim*2, df_dim*4, stridex=2, stridey=2,name='d_h2_conv')
-        bn2 = disc_batch_norm(conv_output2, training = phase_train)
+        bn2 = disc_batch_norm(conv_output2, training = phase_train, name = 'd_bn2')
         h2 = lrelu(bn2)
         h3 = tf.nn.max_pool2d(input=h2, ksize=[1,4,4,1], strides=[1,1,1,1],padding='VALID')
         h6 = tf.reshape(h2,[-1, 4*4*df_dim*4])
