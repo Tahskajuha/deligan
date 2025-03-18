@@ -128,7 +128,7 @@ def generator(z):
 
 gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.2)
 with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options)) as sess:
-    batchsize = 50
+    batchsize = 100
     imageshape = [28*28]
     z_dim = 30
     gf_dim = 16
@@ -164,13 +164,13 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
     trainx = np.concatenate([data['trainInps']], axis=0)
     trainy = np.concatenate([data['trainTargs']], axis=0)
     trainx = 2*trainx/255.-1
-    data = []
+    #data = []
     # Uniformly sampling 50 images per category from the dataset
-    for i in range(10):
-        train = trainx[np.argmax(trainy,1)==i]
-        data.append(train[-50:])
-    data = np.array(data)
-    data = np.reshape(data,[-1,28*28])
+    #for i in range(10):
+    #    train = trainx[np.argmax(trainy,1)==i]
+    #    data.append(train[-50:])
+    #data = np.array(data)
+    data = np.reshape(trainx,[-1,28*28])            #replace trainx with data and uncomment the part above for debug mode
 
     d_optim = tf.compat.v1.train.AdamOptimizer(lr1, beta1=beta1).minimize(dloss, var_list=d_vars)
     g_optim = tf.compat.v1.train.AdamOptimizer(lr1, beta1=beta1).minimize(gloss + sigma_loss, var_list=g_vars)
@@ -189,7 +189,7 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
     thres=1.0      # used to balance gan training
     count1=0
     count2=0
-    t1=0.70
+    t1=0.50
 
     if train:
         # saver.restore(sess, tf.train.latest_checkpoint(os.getcwd()+"../results/mnist/train/"))
