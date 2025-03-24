@@ -126,19 +126,27 @@ def generator(z):
         h4 = tf.tanh(convt(h3,[batchsize, 28, 28, 1], 5, 5, 2, 2, name='g_h4'))
         return h4
 
-gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.2)
+gpu_options = tf.compat.v1.GPUOptions(allow_growth=True)
 with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options)) as sess:
-    batchsize = 100
+    batchsize = 60
     imageshape = [28*28]
     z_dim = 30
     gf_dim = 16
     df_dim = 16
+    counter = 1
+    beta1 = 0.6         #Controls the influence of previous data points in generator at current data point
+
+    #Exponential learning rate decay
     learningrate = 0.0005
-    beta1 = 0.5
+    decay_rate = 0.96
+    decay_steps = 1500
+
+    lr1 = tf.compat.v1.train.exponential_decay(
+            learningrate, counter, decay_steps, decay_rate, staircase=True
+    )
 
     images = tf.compat.v1.placeholder(tf.float32, [batchsize] + imageshape, name="real_images")
     z = tf.compat.v1.placeholder(tf.float32, [None, z_dim], name="z")
-    lr1 = tf.compat.v1.placeholder(tf.float32, name="lr")
     # Our Mixture Model modifications
     zin = tf.compat.v1.get_variable("g_z", [batchsize, z_dim],initializer=tf.compat.v1.random_uniform_initializer(-1,1))
     zsig = tf.compat.v1.get_variable("g_sig", [batchsize, z_dim],initializer=tf.compat.v1.constant_initializer(0.2))
@@ -152,7 +160,8 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
     d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = D_logit, labels = tf.ones_like(D_logit)))
     d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = D_fake_logit, labels = tf.zeros_like(D_fake_logit)))
 
-    sigma_loss = tf.reduce_mean(tf.square(zsig-1))/3    # sigma regularizer
+    sigma_loss = tf.reduce_mean(tf.square(zsig-1))    # sigma regularizer
+    sigma_loss = tf.clip_by_value(sigma_loss, 0.1, 2.0)
     gloss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = D_fake_logit, labels = tf.ones_like(D_fake_logit)))
     dloss = d_loss_real + d_loss_fake
 
@@ -165,10 +174,10 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
     trainy = np.concatenate([data['trainTargs']], axis=0)
     trainx = 2*trainx/255.-1
     #data = []
-    # Uniformly sampling 50 images per category from the dataset
+    #Uniformly sampling 1000 images per category from the dataset
     #for i in range(10):
-    #    train = trainx[np.argmax(trainy,1)==i]
-    #    data.append(train[-50:])
+        #train = trainx[np.argmax(trainy,1)==i]
+        #data.append(train[-1000:])
     #data = np.array(data)
     data = np.reshape(trainx,[-1,28*28])            #replace trainx with data and uncomment the part above for debug mode
 
@@ -178,7 +187,6 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
 
     saver = tf.compat.v1.train.Saver(max_to_keep=10)
 
-    counter = 1
     start_time = time.time()
     data_size = data.shape[0]
     display_z = np.random.uniform(-1.0, 1.0, [batchsize, z_dim]).astype(np.float32)
@@ -189,15 +197,15 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
     thres=1.0      # used to balance gan training
     count1=0
     count2=0
-    t1=0.50
+    t1=0.65
+    T_epoch = 4000           #Set to 4000 for a full run
 
     if train:
         # saver.restore(sess, tf.train.latest_checkpoint(os.getcwd()+"../results/mnist/train/"))
         # training a model
-        for epoch in range(4000):
+        for epoch in range(T_epoch):
             batch_idx = data_size//batchsize
             batch = data[rng.permutation(data_size)]
-            lr = learningrate * (np.minimum((4 - epoch/1000.), 3.)/3)
             for idx in range(batch_idx):
                 batch_images = batch[idx*batchsize:(idx+1)*batchsize]
                 batch_z = np.random.uniform(-1.0, 1.0, [batchsize, z_dim]).astype(np.float32)
@@ -213,11 +221,11 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
                 for k in range(5):
                     batch_z = np.random.normal(0, 1.0, [batchsize, z_dim]).astype(np.float32)
                     if gloss.eval({z: batch_z, phase_train: False})>thres:
-                        sess.run([g_optim], feed_dict={z: batch_z, lr1:lr, phase_train: True})
+                        sess.run([g_optim, lr1], feed_dict={z: batch_z, phase_train: True})
                         count1+=1
                         count2=0
                     else:
-                        sess.run([d_optim], feed_dict={ images: batch_images, z: batch_z, lr1:lr, phase_train: True})
+                        sess.run([d_optim, lr1], feed_dict={ images: batch_images, z: batch_z, phase_train: True})
                         count2-=1
                         count1=0
                 counter += 1
@@ -253,10 +261,20 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
 
                     # Plotting the latent space using tsne
                     z_Mog = zin.eval()#display_z
+                    if np.isnan(z_Mog).any():
+                        print("z_Mog is FUCKED!")
+                    else:
+                        print(np.std(z_Mog, axis=0))
                     gen = G.eval({z:display_z,  phase_train: False})
-                    Y = tsne.tsne(z_Mog, 2, z_dim, 10.0);
+                    if np.isnan(gen).any():
+                        print("Generator is FUCKED!")
+                    Y = tsne.tsne(z_Mog, 2, z_dim, 10.0)
+                    if np.isnan(Y).any():
+                        print("Y is FUCKED!")
                     Plot.scatter(Y[:,0], Y[:,1])
                     xtrain = gen.copy()
+                    if np.isnan(xtrain).any():
+                        print("Dataset is FUCKED!")
                     fig, ax = Plot.subplots()
                     artists = []
                     for i, (x0, y0) in enumerate(zip(Y[:,0], Y[:,1])):
@@ -270,6 +288,9 @@ with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_option
                     Plot.scatter(Y[:,0], Y[:,1], 20);
                     fig.savefig(results_dir + "/plot" + str(counter) + ".png")
                     saver.save(sess,os.path.expanduser("~/results/train/"), global_step=counter)
+            else:
+                #Clip latent space to prevent sigloss collapse unless tsne is running
+                sess.run([zsig.assign(tf.clip_by_value(zsig, 0.684, 1.316))])
     else:
         #Generating samples from a saved model
         saver.restore(sess,tf.train.latest_checkpoint(os.path.expanduser("~/results/train/")))
